@@ -138,8 +138,13 @@ Scriptable: e.g. "turn 1 → request `search_knowledge_base`, turn 2 → return 
 testing the tool-calling loop without the real API.
 
 ### 7.6 System prompt (`app/agent/prompts.py`)
-Updated: tell the AI it has `search_knowledge_base` and **must** use it for questions about
-services/pricing/profile/FAQ, then answer from the results — never invent facts.
+Updated on two counts:
+1. **Correct the company identity** to **PT Efisien Integrasi Indonesia** (efisien.id) with its
+   real services (ERP & Enterprise, AI & ML, Industrial Computer Vision, Conversational AI,
+   IoT & Embedded, Data Analytics & BI, Web & Mobile). The brief's "PT Maju Digital" was a
+   placeholder; the Sprint 1 prompt referencing it is replaced here.
+2. **Tool guidance:** tell the AI it has `search_knowledge_base` and **must** use it for
+   questions about services/pricing/profile/FAQ, then answer from the results — never invent facts.
 
 ## 8. Error Handling
 
