@@ -17,9 +17,9 @@ class Embedder(ABC):
 
 
 class GeminiEmbedder(Embedder):
-    def __init__(self, api_key: str | None = None, model: str = "text-embedding-004") -> None:
+    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
         self.client = genai.Client(api_key=api_key or settings.gemini_api_key)
-        self.model = model
+        self.model = model or settings.gemini_embedding_model
 
     def _embed(self, texts: list[str], task_type: str) -> list[list[float]]:
         resp = self.client.models.embed_content(
