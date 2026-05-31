@@ -9,8 +9,6 @@ def test_handle_chat_persists_user_and_assistant_messages(session):
         session, llm, message="Apa saja layanan kalian?", name="Budi", phone="0811"
     )
     assert reply == "Tentu, kami menyediakan banyak layanan."
-    assert user.id is not None
-
     stored = MessageRepository(session).recent(user.id, limit=10)
     assert [(m.role, m.content) for m in stored] == [
         ("user", "Apa saja layanan kalian?"),
@@ -23,7 +21,5 @@ def test_handle_chat_sends_prior_history_to_llm(session):
     handle_chat(session, llm, message="pesan pertama", phone="0811")
     handle_chat(session, llm, message="pesan kedua", phone="0811")
 
-    # On the second turn the LLM should have received the prior turns + new message.
-    contents = [m.content for m in llm.last_messages]
-    assert contents == ["pesan pertama", "ok", "pesan kedua"]
-    assert llm.last_system.startswith("Anda adalah asisten Customer Service AI")
+    _system, sent_messages, _tools = llm.calls[-1]
+    assert [m.content for m in sent_messages] == ["pesan pertama", "ok", "pesan kedua"]

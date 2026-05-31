@@ -27,7 +27,8 @@ def handle_chat(
     llm_messages = [ChatMessage(role=m.role, content=m.content) for m in history]
     llm_messages.append(ChatMessage(role="user", content=message))
 
-    reply = llm.generate(SYSTEM_PROMPT, llm_messages)
+    response = llm.generate(SYSTEM_PROMPT, llm_messages)
+    reply = response.text or ""
 
     messages.add(user.id, "user", message)
     messages.add(user.id, "assistant", reply)
