@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Efisien CS — PT Maju Digital</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    #log { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; height: 360px; overflow-y: auto; }
+    .msg { margin: .4rem 0; }
+    .user { text-align: right; color: #1a73e8; }
+    .ai { text-align: left; color: #202124; }
+    form { display: flex; gap: .5rem; margin-top: .75rem; }
+    input[type=text] { flex: 1; padding: .6rem; }
+    button { padding: .6rem 1rem; }
+    .ident { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  </style>
+</head>
+<body>
+  <h2>AI Customer Service — PT Maju Digital</h2>
+  <div class="ident">
+    <input id="name" type="text" placeholder="Nama" />
+    <input id="phone" type="text" placeholder="No. HP (mis. 08123...)" />
+  </div>
+  <div id="log"></div>
+  <form id="form">
+    <input id="message" type="text" placeholder="Tulis pesan..." autocomplete="off" required />
+    <button type="submit">Kirim</button>
+  </form>
+
+  <script>
+    const log = document.getElementById("log");
+    function add(text, cls) {
+      const div = document.createElement("div");
+      div.className = "msg " + cls;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const message = document.getElementById("message").value.trim();
+      const name = document.getElementById("name").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      if (!message) return;
+      if (!phone) { add("Mohon isi No. HP dulu.", "ai"); return; }
+      add(message, "user");
+      document.getElementById("message").value = "";
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, name: name || null, phone }),
+        });
+        const data = await res.json();
+        add(data.reply ?? "(tidak ada balasan)", "ai");
+      } catch (err) {
+        add("Terjadi kesalahan koneksi.", "ai");
+      }
+    });
+  </script>
+</body>
+</html>
