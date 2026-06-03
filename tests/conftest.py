@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 from app.models.base import Base
 from app.models.user import User  # noqa: F401  (register table)
 from app.models.message import Message  # noqa: F401  (register table)
+from app.models.lead import Lead  # noqa: F401  (register table)
 
 
 @pytest.fixture
