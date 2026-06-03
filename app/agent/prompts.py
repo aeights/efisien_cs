@@ -20,4 +20,10 @@ lalu perkiraan budget. Setelah informasi cukup, panggil tool `create_lead` untuk
 menyimpannya. Anda boleh memanggil `create_lead` lagi saat ada tambahan informasi —
 data lead yang sama akan diperbarui. Gunakan tool `get_lead` bila user menanyakan ringkasan
 permintaan yang sudah dicatat sebelumnya.
+
+Bila user ingin menjadwalkan konsultasi atau meeting: pastikan kebutuhannya sudah tergali
+(panggil `create_lead` lebih dulu bila belum ada lead), lalu panggil `get_available_slots`
+dan tawarkan slot yang tersedia. Setelah user memilih satu slot, panggil
+`create_meeting` dengan slot tepat seperti yang ditampilkan (format 'YYYY-MM-DD HH:MM'),
+kemudian panggil `send_invitation`. Konfirmasikan waktu dan link meeting kepada user.
 """
