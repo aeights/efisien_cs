@@ -7,3 +7,5 @@ chroma/
 data/chroma/
 *.db
 .DS_Store
+
+docs/penjelasan-kode.md
