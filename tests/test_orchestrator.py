@@ -46,3 +46,35 @@ def test_max_iterations_guard_when_llm_never_answers(session):
     reply, _user = handle_chat(session, llm, _FakeRetriever(), message="loop?", phone="0811")
     assert "maaf" in reply.lower()
     assert len(llm.calls) == MAX_ITERATIONS
+
+
+def test_create_lead_loop_persists_lead(session):
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    name="create_lead",
+                    args={
+                        "project_type": "POS",
+                        "platform": "Web",
+                        "requirements": "3 cabang",
+                        "budget": "20 juta",
+                    },
+                )
+            ]
+        ),
+        LLMResponse(text="Siap, kebutuhan Anda sudah saya catat."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="mau bikin aplikasi POS", phone="0812"
+    )
+    assert reply == "Siap, kebutuhan Anda sudah saya catat."
+
+    from app.repositories.lead_repo import LeadRepository
+
+    lead = LeadRepository(session).get_latest(user.id)
+    assert lead is not None
+    assert lead.project_type == "POS"
+    assert lead.requirements == {"text": "3 cabang"}
+    assert lead.budget == "20 juta"

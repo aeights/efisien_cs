@@ -12,6 +12,7 @@ from app.main import app
 from app.models.base import Base
 from app.models.user import User  # noqa: F401
 from app.models.message import Message  # noqa: F401
+from app.models.lead import Lead  # noqa: F401
 from app.rag.embeddings import FakeEmbedder
 from app.rag.retriever import Retriever
 from app.rag.store import ChromaStore
@@ -88,3 +89,18 @@ def test_faq_flow_uses_rag(build_client):
     resp = client.post("/chat", json={"message": "apa saja layanan?", "phone": "0811"})
     assert resp.status_code == 200
     assert "ERP" in resp.json()["reply"]
+
+
+def test_lead_flow_replies_after_create_lead(build_client):
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(name="create_lead", args={"project_type": "POS", "budget": "20 juta"})
+            ]
+        ),
+        LLMResponse(text="Kebutuhan Anda sudah dicatat, tim kami akan menindaklanjuti."),
+    ]
+    client = build_client(FakeLLM(responses=scripted), _EmptyRetriever())
+    resp = client.post("/chat", json={"message": "mau bikin POS", "phone": "0899"})
+    assert resp.status_code == 200
+    assert "dicatat" in resp.json()["reply"]
