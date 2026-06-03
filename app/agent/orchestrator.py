@@ -40,7 +40,9 @@ def handle_chat(
         if response.tool_calls:
             convo.append(ChatMessage(role="assistant", tool_calls=response.tool_calls))
             for tool_call in response.tool_calls:
-                result = dispatch(tool_call, retriever=retriever)
+                result = dispatch(
+                    tool_call, retriever=retriever, session=session, user=user
+                )
                 convo.append(
                     ChatMessage(role="tool", tool_name=tool_call.name, content=result)
                 )
