@@ -78,3 +78,36 @@ def test_create_lead_loop_persists_lead(session):
     assert lead.project_type == "POS"
     assert lead.requirements == {"text": "3 cabang"}
     assert lead.budget == "20 juta"
+
+
+def test_booking_loop_persists_meeting(session):
+    from datetime import datetime
+
+    from app.integrations.calendar import WIB, fmt_slot
+    from app.repositories.meeting_repo import MeetingRepository
+    from tests.fakes import FakeCalendar, FakeEmail
+
+    slot = datetime(2099, 1, 5, 9, 0, tzinfo=WIB)
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="create_lead", args={"project_type": "POS"})]),
+        LLMResponse(tool_calls=[ToolCall(name="get_available_slots", args={})]),
+        LLMResponse(tool_calls=[ToolCall(name="create_meeting", args={"slot": fmt_slot(slot)})]),
+        LLMResponse(tool_calls=[ToolCall(name="send_invitation", args={})]),
+        LLMResponse(text="Meeting Anda sudah terjadwal."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    mail = FakeEmail()
+    reply, user = handle_chat(
+        session,
+        llm,
+        _FakeRetriever(),
+        message="mau konsultasi",
+        phone="0812",
+        calendar=FakeCalendar([slot]),
+        mailer=mail,
+    )
+    assert reply == "Meeting Anda sudah terjadwal."
+    meeting = MeetingRepository(session).get_latest_for_user(user.id)
+    assert meeting is not None
+    assert meeting.meeting_link.startswith("https://")
+    assert mail.sent
