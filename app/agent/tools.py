@@ -1,7 +1,10 @@
 import json
+import uuid
 
+from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
 from app.repositories.lead_repo import LeadRepository
+from app.repositories.meeting_repo import MeetingRepository
 
 TOOL_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -58,10 +61,49 @@ TOOL_SPECS: list[ToolSpec] = [
         ),
         parameters={"type": "object", "properties": {}},
     ),
+    ToolSpec(
+        name="get_available_slots",
+        description=(
+            "Lihat slot jadwal konsultasi yang masih tersedia (hari kerja, jam kerja). "
+            "Panggil saat user ingin booking meeting/konsultasi."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="create_meeting",
+        description=(
+            "Pesan jadwal konsultasi pada slot yang dipilih user. Panggil setelah user "
+            "memilih salah satu slot dari get_available_slots."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "slot": {
+                    "type": "string",
+                    "description": "Slot terpilih, format 'YYYY-MM-DD HH:MM' (WIB)",
+                }
+            },
+            "required": ["slot"],
+        },
+    ),
+    ToolSpec(
+        name="send_invitation",
+        description=(
+            "Kirim undangan konsultasi (berisi waktu & link) ke kontak user, "
+            "untuk meeting terbaru yang sudah dibuat."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
 ]
 
 
-def dispatch(tool_call: ToolCall, *, retriever=None, session=None, user=None) -> str:
+def _meeting_link() -> str:
+    return f"https://meet.efisien.id/{uuid.uuid4().hex[:8]}"
+
+
+def dispatch(
+    tool_call: ToolCall, *, retriever=None, session=None, user=None, calendar=None, email=None
+) -> str:
     """Execute a tool call and return a JSON string result to feed back to the LLM."""
     try:
         if tool_call.name == "search_knowledge_base":
@@ -111,6 +153,56 @@ def dispatch(tool_call: ToolCall, *, retriever=None, session=None, user=None) ->
                 },
                 ensure_ascii=False,
             )
+
+        if tool_call.name == "get_available_slots":
+            booked = MeetingRepository(session).scheduled_times()
+            slots = calendar.available_slots(booked, now=now_wib())
+            return json.dumps(
+                {"slots": [fmt_slot(s) for s in slots[:8]]}, ensure_ascii=False
+            )
+
+        if tool_call.name == "create_meeting":
+            lead = LeadRepository(session).get_latest(user.id)
+            if lead is None:
+                return json.dumps(
+                    {"result": "Belum ada lead. Gali kebutuhan klien dulu sebelum booking."},
+                    ensure_ascii=False,
+                )
+            chosen = tool_call.args.get("slot", "")
+            booked = MeetingRepository(session).scheduled_times()
+            available = {fmt_slot(s) for s in calendar.available_slots(booked, now=now_wib())}
+            if chosen not in available:
+                return json.dumps(
+                    {"error": f"Slot '{chosen}' tidak tersedia. Tawarkan slot lain."},
+                    ensure_ascii=False,
+                )
+            meeting = MeetingRepository(session).create(
+                lead.id, parse_slot(chosen), _meeting_link()
+            )
+            return json.dumps(
+                {
+                    "meeting_id": meeting.id,
+                    "meeting_time": chosen,
+                    "meeting_link": meeting.meeting_link,
+                    "status": meeting.status,
+                },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "send_invitation":
+            meeting = MeetingRepository(session).get_latest_for_user(user.id)
+            if meeting is None:
+                return json.dumps(
+                    {"result": "Belum ada meeting untuk dikirimi undangan."},
+                    ensure_ascii=False,
+                )
+            to = user.email or user.phone
+            email.send(
+                to,
+                "Undangan Konsultasi - PT Efisien Integrasi Indonesia",
+                f"Jadwal: {fmt_slot(meeting.meeting_time)} WIB\nLink: {meeting.meeting_link}",
+            )
+            return json.dumps({"result": f"Undangan terkirim ke {to}."}, ensure_ascii=False)
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False

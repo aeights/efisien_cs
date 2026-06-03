@@ -24,6 +24,8 @@ def handle_chat(
     name: str | None = None,
     phone: str | None = None,
     email: str | None = None,
+    calendar=None,
+    mailer=None,
 ) -> tuple[str, User]:
     users = UserRepository(session)
     messages = MessageRepository(session)
@@ -41,7 +43,12 @@ def handle_chat(
             convo.append(ChatMessage(role="assistant", tool_calls=response.tool_calls))
             for tool_call in response.tool_calls:
                 result = dispatch(
-                    tool_call, retriever=retriever, session=session, user=user
+                    tool_call,
+                    retriever=retriever,
+                    session=session,
+                    user=user,
+                    calendar=calendar,
+                    email=mailer,
                 )
                 convo.append(
                     ChatMessage(role="tool", tool_name=tool_call.name, content=result)
