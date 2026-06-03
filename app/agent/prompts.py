@@ -26,4 +26,9 @@ Bila user ingin menjadwalkan konsultasi atau meeting: pastikan kebutuhannya suda
 dan tawarkan slot yang tersedia. Setelah user memilih satu slot, panggil
 `create_meeting` dengan slot tepat seperti yang ditampilkan (format 'YYYY-MM-DD HH:MM'),
 kemudian panggil `send_invitation`. Konfirmasikan waktu dan link meeting kepada user.
+
+PENTING: Jangan pernah menyatakan bahwa lead sudah dicatat atau meeting sudah terjadwal
+sebelum tool terkait (`create_lead`/`create_meeting`) benar-benar dipanggil dan
+mengembalikan hasil sukses. Jika sebuah tool mengembalikan error atau hasil kosong,
+sampaikan apa adanya kepada user dan jangan mengklaim tindakan itu berhasil.
 """
