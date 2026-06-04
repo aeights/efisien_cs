@@ -179,3 +179,29 @@ def test_dispatch_send_invitation(session):
     )
     assert mail.sent and mail.sent[0][0] == "b@mail.com"
     assert "terkirim" in out["result"].lower()
+
+
+from app.repositories.project_repo import ProjectRepository
+from app.repositories.ticket_repo import TicketRepository
+
+
+def test_dispatch_get_project_status_empty(session):
+    user = _seed_user(session, phone="0830")
+    out = json.loads(
+        dispatch(ToolCall(name="get_project_status", args={}), session=session, user=user)
+    )
+    assert "Belum ada proyek" in out["result"]
+
+
+def test_dispatch_get_project_status_returns_projects(session):
+    user = _seed_user(session, phone="0831")
+    ProjectRepository(session).create(
+        user.id, name="POS Toko A", type="POS", progress=70,
+        status="in_progress", details={"frontend": 80},
+    )
+    out = json.loads(
+        dispatch(ToolCall(name="get_project_status", args={}), session=session, user=user)
+    )
+    assert out["projects"][0]["name"] == "POS Toko A"
+    assert out["projects"][0]["progress"] == 70
+    assert out["projects"][0]["details"] == {"frontend": 80}

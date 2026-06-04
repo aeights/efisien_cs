@@ -5,6 +5,8 @@ from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
 from app.repositories.lead_repo import LeadRepository
 from app.repositories.meeting_repo import MeetingRepository
+from app.repositories.project_repo import ProjectRepository
+from app.repositories.ticket_repo import TicketRepository
 
 TOOL_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -91,6 +93,14 @@ TOOL_SPECS: list[ToolSpec] = [
         description=(
             "Kirim undangan konsultasi (berisi waktu & link) ke kontak user, "
             "untuk meeting terbaru yang sudah dibuat."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="get_project_status",
+        description=(
+            "Lihat status dan progres proyek milik klien yang sedang chat. "
+            "Panggil saat klien existing menanyakan perkembangan proyeknya."
         ),
         parameters={"type": "object", "properties": {}},
     ),
@@ -203,6 +213,29 @@ def dispatch(
                 f"Jadwal: {fmt_slot(meeting.meeting_time)} WIB\nLink: {meeting.meeting_link}",
             )
             return json.dumps({"result": f"Undangan terkirim ke {to}."}, ensure_ascii=False)
+
+        if tool_call.name == "get_project_status":
+            projects = ProjectRepository(session).list_for_user(user.id)
+            if not projects:
+                return json.dumps(
+                    {"result": "Belum ada proyek terdaftar atas nama Anda."},
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "projects": [
+                        {
+                            "name": p.name,
+                            "type": p.type,
+                            "progress": p.progress,
+                            "status": p.status,
+                            "details": p.details,
+                        }
+                        for p in projects
+                    ]
+                },
+                ensure_ascii=False,
+            )
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False
