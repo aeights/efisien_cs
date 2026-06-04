@@ -104,11 +104,43 @@ TOOL_SPECS: list[ToolSpec] = [
         ),
         parameters={"type": "object", "properties": {}},
     ),
+    ToolSpec(
+        name="create_ticket",
+        description=(
+            "Buat tiket support untuk klien existing yang melaporkan masalah atau "
+            "permintaan. Tentukan category (bug/feature/question) dan priority "
+            "(low/med/high) dari isi keluhan. Panggil setelah deskripsi masalah jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Ringkasan masalah atau permintaan klien",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["bug", "feature", "question"],
+                    "description": "Jenis tiket",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "med", "high"],
+                    "description": "Tingkat prioritas",
+                },
+            },
+            "required": ["description"],
+        },
+    ),
 ]
 
 
 def _meeting_link() -> str:
     return f"https://meet.efisien.id/{uuid.uuid4().hex[:8]}"
+
+
+_CATEGORIES = {"bug", "feature", "question"}
+_PRIORITIES = {"low", "med", "high"}
 
 
 def dispatch(
@@ -233,6 +265,34 @@ def dispatch(
                         }
                         for p in projects
                     ]
+                },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "create_ticket":
+            description = tool_call.args.get("description", "")
+            category = tool_call.args.get("category")
+            if category not in _CATEGORIES:
+                category = "question"
+            priority = tool_call.args.get("priority")
+            if priority not in _PRIORITIES:
+                priority = "med"
+            projects = ProjectRepository(session).list_for_user(user.id)
+            project_id = projects[-1].id if projects else None
+            ticket = TicketRepository(session).create(
+                user.id,
+                description=description,
+                category=category,
+                priority=priority,
+                project_id=project_id,
+            )
+            return json.dumps(
+                {
+                    "ticket_id": ticket.id,
+                    "category": ticket.category,
+                    "priority": ticket.priority,
+                    "status": ticket.status,
+                    "project_id": ticket.project_id,
                 },
                 ensure_ascii=False,
             )
