@@ -14,6 +14,8 @@ from app.models.user import User  # noqa: F401
 from app.models.message import Message  # noqa: F401
 from app.models.lead import Lead  # noqa: F401
 from app.models.meeting import Meeting  # noqa: F401
+from app.models.project import Project  # noqa: F401
+from app.models.ticket import Ticket  # noqa: F401
 from app.rag.embeddings import FakeEmbedder
 from app.rag.retriever import Retriever
 from app.rag.store import ChromaStore
@@ -128,3 +130,33 @@ def test_booking_flow_replies_after_create_meeting(build_client):
     resp = client.post("/chat", json={"message": "mau konsultasi", "phone": "0899"})
     assert resp.status_code == 200
     assert "terjadwal" in resp.json()["reply"]
+
+
+def test_ticket_flow_via_chat(build_client):
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    name="create_ticket",
+                    args={"description": "error login", "category": "bug", "priority": "high"},
+                )
+            ]
+        ),
+        LLMResponse(tool_calls=[ToolCall(name="assign_developer", args={})]),
+        LLMResponse(text="Tiket Anda sudah dibuat dan ditugaskan."),
+    ]
+    client = build_client(FakeLLM(responses=scripted), _EmptyRetriever())
+    resp = client.post("/chat", json={"message": "aplikasi error", "phone": "0861"})
+    assert resp.status_code == 200
+    assert "ditugaskan" in resp.json()["reply"]
+
+
+def test_project_status_flow_via_chat(build_client):
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="get_project_status", args={})]),
+        LLMResponse(text="Status proyek Anda sudah saya cek."),
+    ]
+    client = build_client(FakeLLM(responses=scripted), _EmptyRetriever())
+    resp = client.post("/chat", json={"message": "gimana proyek saya?", "phone": "0862"})
+    assert resp.status_code == 200
+    assert "proyek" in resp.json()["reply"].lower()
