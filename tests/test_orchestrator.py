@@ -111,3 +111,30 @@ def test_booking_loop_persists_meeting(session):
     assert meeting is not None
     assert meeting.meeting_link.startswith("https://")
     assert mail.sent
+
+
+def test_ticket_loop_creates_and_assigns(session):
+    from app.repositories.ticket_repo import TicketRepository
+
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    name="create_ticket",
+                    args={"description": "tidak bisa login", "category": "bug", "priority": "high"},
+                )
+            ]
+        ),
+        LLMResponse(tool_calls=[ToolCall(name="assign_developer", args={})]),
+        LLMResponse(text="Tiket Anda sudah dibuat dan ditugaskan ke tim kami."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="aplikasi saya error", phone="0860"
+    )
+    assert "ditugaskan" in reply
+    ticket = TicketRepository(session).get_latest_for_user(user.id)
+    assert ticket is not None
+    assert ticket.status == "assigned"
+    assert ticket.category == "bug"
+    assert ticket.assigned_developer == "Tim Development"

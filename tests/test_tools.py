@@ -179,3 +179,88 @@ def test_dispatch_send_invitation(session):
     )
     assert mail.sent and mail.sent[0][0] == "b@mail.com"
     assert "terkirim" in out["result"].lower()
+
+
+from app.repositories.project_repo import ProjectRepository
+from app.repositories.ticket_repo import TicketRepository
+
+
+def test_dispatch_get_project_status_empty(session):
+    user = _seed_user(session, phone="0830")
+    out = json.loads(
+        dispatch(ToolCall(name="get_project_status", args={}), session=session, user=user)
+    )
+    assert "Belum ada proyek" in out["result"]
+
+
+def test_dispatch_get_project_status_returns_projects(session):
+    user = _seed_user(session, phone="0831")
+    ProjectRepository(session).create(
+        user.id, name="POS Toko A", type="POS", progress=70,
+        status="in_progress", details={"frontend": 80},
+    )
+    out = json.loads(
+        dispatch(ToolCall(name="get_project_status", args={}), session=session, user=user)
+    )
+    assert out["projects"][0]["name"] == "POS Toko A"
+    assert out["projects"][0]["progress"] == 70
+    assert out["projects"][0]["details"] == {"frontend": 80}
+
+
+def test_dispatch_create_ticket_injects_user_and_links_project(session):
+    user = _seed_user(session, phone="0832")
+    project = ProjectRepository(session).create(user.id, name="Web", type="Website")
+    out = json.loads(
+        dispatch(
+            ToolCall(
+                name="create_ticket",
+                args={"description": "tidak bisa login", "category": "bug", "priority": "high"},
+            ),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["status"] == "open"
+    assert out["category"] == "bug"
+    assert out["priority"] == "high"
+    assert out["project_id"] == project.id
+    ticket = TicketRepository(session).get_latest_for_user(user.id)
+    assert ticket.user_id == user.id
+    assert ticket.description == "tidak bisa login"
+
+
+def test_dispatch_create_ticket_invalid_enum_falls_back(session):
+    user = _seed_user(session, phone="0833")
+    out = json.loads(
+        dispatch(
+            ToolCall(
+                name="create_ticket",
+                args={"description": "x", "category": "wut", "priority": "urgent"},
+            ),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["category"] == "question"
+    assert out["priority"] == "med"
+    assert out["project_id"] is None
+
+
+def test_dispatch_assign_developer_sets_assigned(session):
+    user = _seed_user(session, phone="0834")
+    TicketRepository(session).create(
+        user.id, description="x", category="bug", priority="med"
+    )
+    out = json.loads(
+        dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
+    )
+    assert out["status"] == "assigned"
+    assert out["assigned_developer"] == "Tim Development"
+
+
+def test_dispatch_assign_developer_no_ticket(session):
+    user = _seed_user(session, phone="0835")
+    out = json.loads(
+        dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
+    )
+    assert "Belum ada tiket" in out["result"]

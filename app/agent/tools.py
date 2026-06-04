@@ -5,6 +5,8 @@ from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
 from app.repositories.lead_repo import LeadRepository
 from app.repositories.meeting_repo import MeetingRepository
+from app.repositories.project_repo import ProjectRepository
+from app.repositories.ticket_repo import TicketRepository
 
 TOOL_SPECS: list[ToolSpec] = [
     ToolSpec(
@@ -94,11 +96,59 @@ TOOL_SPECS: list[ToolSpec] = [
         ),
         parameters={"type": "object", "properties": {}},
     ),
+    ToolSpec(
+        name="get_project_status",
+        description=(
+            "Lihat status dan progres proyek milik klien yang sedang chat. "
+            "Panggil saat klien existing menanyakan perkembangan proyeknya."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="create_ticket",
+        description=(
+            "Buat tiket support untuk klien existing yang melaporkan masalah atau "
+            "permintaan. Tentukan category (bug/feature/question) dan priority "
+            "(low/med/high) dari isi keluhan. Panggil setelah deskripsi masalah jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "Ringkasan masalah atau permintaan klien",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["bug", "feature", "question"],
+                    "description": "Jenis tiket",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "med", "high"],
+                    "description": "Tingkat prioritas",
+                },
+            },
+            "required": ["description"],
+        },
+    ),
+    ToolSpec(
+        name="assign_developer",
+        description=(
+            "Tugaskan tiket terbaru milik klien ke tim developer (ubah status "
+            "menjadi 'assigned'). Panggil setelah create_ticket berhasil."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
 ]
 
 
 def _meeting_link() -> str:
     return f"https://meet.efisien.id/{uuid.uuid4().hex[:8]}"
+
+
+_CATEGORIES = {"bug", "feature", "question"}
+_PRIORITIES = {"low", "med", "high"}
 
 
 def dispatch(
@@ -203,6 +253,77 @@ def dispatch(
                 f"Jadwal: {fmt_slot(meeting.meeting_time)} WIB\nLink: {meeting.meeting_link}",
             )
             return json.dumps({"result": f"Undangan terkirim ke {to}."}, ensure_ascii=False)
+
+        if tool_call.name == "get_project_status":
+            projects = ProjectRepository(session).list_for_user(user.id)
+            if not projects:
+                return json.dumps(
+                    {"result": "Belum ada proyek terdaftar atas nama Anda."},
+                    ensure_ascii=False,
+                )
+            return json.dumps(
+                {
+                    "projects": [
+                        {
+                            "name": p.name,
+                            "type": p.type,
+                            "progress": p.progress,
+                            "status": p.status,
+                            "details": p.details,
+                        }
+                        for p in projects
+                    ]
+                },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "create_ticket":
+            description = tool_call.args.get("description", "")
+            category = tool_call.args.get("category")
+            if category not in _CATEGORIES:
+                category = "question"
+            priority = tool_call.args.get("priority")
+            if priority not in _PRIORITIES:
+                priority = "med"
+            projects = ProjectRepository(session).list_for_user(user.id)
+            project_id = projects[-1].id if projects else None
+            ticket = TicketRepository(session).create(
+                user.id,
+                description=description,
+                category=category,
+                priority=priority,
+                project_id=project_id,
+            )
+            return json.dumps(
+                {
+                    "ticket_id": ticket.id,
+                    "category": ticket.category,
+                    "priority": ticket.priority,
+                    "status": ticket.status,
+                    "project_id": ticket.project_id,
+                },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "assign_developer":
+            ticket = TicketRepository(session).get_latest_for_user(user.id)
+            if ticket is None:
+                return json.dumps(
+                    {"result": "Belum ada tiket untuk ditugaskan."}, ensure_ascii=False
+                )
+            TicketRepository(session).assign(ticket)
+            print(
+                f"[ASSIGN] Tiket #{ticket.id} ({ticket.priority}/{ticket.category}) "
+                f"ditugaskan ke {ticket.assigned_developer}"
+            )
+            return json.dumps(
+                {
+                    "ticket_id": ticket.id,
+                    "status": ticket.status,
+                    "assigned_developer": ticket.assigned_developer,
+                },
+                ensure_ascii=False,
+            )
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False
