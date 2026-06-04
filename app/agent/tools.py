@@ -132,6 +132,14 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["description"],
         },
     ),
+    ToolSpec(
+        name="assign_developer",
+        description=(
+            "Tugaskan tiket terbaru milik klien ke tim developer (ubah status "
+            "menjadi 'assigned'). Panggil setelah create_ticket berhasil."
+        ),
+        parameters={"type": "object", "properties": {}},
+    ),
 ]
 
 
@@ -293,6 +301,26 @@ def dispatch(
                     "priority": ticket.priority,
                     "status": ticket.status,
                     "project_id": ticket.project_id,
+                },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "assign_developer":
+            ticket = TicketRepository(session).get_latest_for_user(user.id)
+            if ticket is None:
+                return json.dumps(
+                    {"result": "Belum ada tiket untuk ditugaskan."}, ensure_ascii=False
+                )
+            TicketRepository(session).assign(ticket)
+            print(
+                f"[ASSIGN] Tiket #{ticket.id} ({ticket.priority}/{ticket.category}) "
+                f"ditugaskan ke {ticket.assigned_developer}"
+            )
+            return json.dumps(
+                {
+                    "ticket_id": ticket.id,
+                    "status": ticket.status,
+                    "assigned_developer": ticket.assigned_developer,
                 },
                 ensure_ascii=False,
             )

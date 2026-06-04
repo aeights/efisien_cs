@@ -244,3 +244,23 @@ def test_dispatch_create_ticket_invalid_enum_falls_back(session):
     assert out["category"] == "question"
     assert out["priority"] == "med"
     assert out["project_id"] is None
+
+
+def test_dispatch_assign_developer_sets_assigned(session):
+    user = _seed_user(session, phone="0834")
+    TicketRepository(session).create(
+        user.id, description="x", category="bug", priority="med"
+    )
+    out = json.loads(
+        dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
+    )
+    assert out["status"] == "assigned"
+    assert out["assigned_developer"] == "Tim Development"
+
+
+def test_dispatch_assign_developer_no_ticket(session):
+    user = _seed_user(session, phone="0835")
+    out = json.loads(
+        dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
+    )
+    assert "Belum ada tiket" in out["result"]
