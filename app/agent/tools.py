@@ -182,6 +182,28 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["reason"],
         },
     ),
+    ToolSpec(
+        name="generate_proposal",
+        description=(
+            "Susun proposal awal (scope, timeline, biaya, deliverables) dari kebutuhan "
+            "lead yang sudah digali. Panggil saat user meminta penawaran/proposal atau "
+            "setelah kebutuhan cukup lengkap. Isi argumen secara realistis."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "description": "Ringkasan lingkup pekerjaan"},
+                "timeline": {"type": "string", "description": "Estimasi waktu, mis. '6-8 minggu'"},
+                "cost": {"type": "string", "description": "Estimasi biaya, mis. 'Rp 25-30 juta'"},
+                "deliverables": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Daftar hasil yang diserahkan",
+                },
+            },
+            "required": ["scope", "timeline", "cost"],
+        },
+    ),
 ]
 
 
@@ -396,6 +418,25 @@ def dispatch(
 
         if tool_call.name == "notify_manager":
             return _notify(session, user, "manager", tool_call.args.get("reason", ""))
+
+        if tool_call.name == "generate_proposal":
+            lead = LeadRepository(session).get_latest(user.id)
+            if lead is None:
+                return json.dumps(
+                    {"result": "Belum ada lead. Gali kebutuhan klien dulu sebelum membuat proposal."},
+                    ensure_ascii=False,
+                )
+            proposal = {
+                "scope": tool_call.args.get("scope", ""),
+                "timeline": tool_call.args.get("timeline", ""),
+                "cost": tool_call.args.get("cost", ""),
+                "deliverables": tool_call.args.get("deliverables", []),
+            }
+            LeadRepository(session).set_proposal(lead, proposal)
+            return json.dumps(
+                {"lead_id": lead.id, "proposal": proposal, "status": lead.status},
+                ensure_ascii=False,
+            )
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False
