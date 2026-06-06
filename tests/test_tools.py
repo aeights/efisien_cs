@@ -288,3 +288,37 @@ def test_dispatch_remember_fact_upserts(session):
     facts = ClientFactRepository(session).list_for_user(user.id)
     assert len(facts) == 1
     assert facts[0].value == "Andi"
+
+
+from app.models.notification import Notification
+
+
+def test_dispatch_notify_sales_writes_row(session):
+    user = _seed_user(session, phone="0841", email="a@mail.com")
+    out = json.loads(
+        dispatch(
+            ToolCall(name="notify_sales", args={"reason": "minta penawaran khusus"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["target_role"] == "sales"
+    assert out["status"] == "sent"
+    notif = session.get(Notification, out["notification_id"])
+    assert notif.reason == "minta penawaran khusus"
+    assert notif.payload["email"] == "a@mail.com"
+    assert notif.payload["phone"] == "0841"
+
+
+def test_dispatch_notify_manager_writes_row(session):
+    user = _seed_user(session, phone="0842")
+    out = json.loads(
+        dispatch(
+            ToolCall(name="notify_manager", args={"reason": "komplain"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["target_role"] == "manager"
+    notif = session.get(Notification, out["notification_id"])
+    assert notif.target_role == "manager"

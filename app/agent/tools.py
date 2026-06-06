@@ -158,6 +158,30 @@ TOOL_SPECS: list[ToolSpec] = [
             "required": ["key", "value"],
         },
     ),
+    ToolSpec(
+        name="notify_sales",
+        description=(
+            "Teruskan ke tim sales saat ada peluang/permintaan komersial yang butuh "
+            "manusia (mis. negosiasi harga, penawaran khusus). Isi 'reason' yang jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string", "description": "Alasan eskalasi ke sales"}},
+            "required": ["reason"],
+        },
+    ),
+    ToolSpec(
+        name="notify_manager",
+        description=(
+            "Eskalasi ke manajer saat user minta bicara dengan manusia, ada komplain "
+            "pembayaran/kontrak, atau kegagalan berulang. Isi 'reason' yang jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string", "description": "Alasan eskalasi ke manajer"}},
+            "required": ["reason"],
+        },
+    ),
 ]
 
 
@@ -167,6 +191,21 @@ def _meeting_link() -> str:
 
 _CATEGORIES = {"bug", "feature", "question"}
 _PRIORITIES = {"low", "med", "high"}
+
+
+def _notify(session, user, role: str, reason: str) -> str:
+    payload = {"name": user.name, "phone": user.phone, "email": user.email}
+    notif = NotificationRepository(session).create(role, reason=reason, payload=payload)
+    print(f"[NOTIFY:{role}] {reason} | user={user.name or user.phone or user.email}")
+    return json.dumps(
+        {
+            "notification_id": notif.id,
+            "target_role": notif.target_role,
+            "status": notif.status,
+            "result": f"Diteruskan ke tim {role}; akan menindaklanjuti.",
+        },
+        ensure_ascii=False,
+    )
 
 
 def dispatch(
@@ -351,6 +390,12 @@ def dispatch(
                 {"key": key, "value": value, "result": "Fakta disimpan."},
                 ensure_ascii=False,
             )
+
+        if tool_call.name == "notify_sales":
+            return _notify(session, user, "sales", tool_call.args.get("reason", ""))
+
+        if tool_call.name == "notify_manager":
+            return _notify(session, user, "manager", tool_call.args.get("reason", ""))
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False
