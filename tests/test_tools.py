@@ -264,3 +264,27 @@ def test_dispatch_assign_developer_no_ticket(session):
         dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
     )
     assert "Belum ada tiket" in out["result"]
+
+
+from app.repositories.client_fact_repo import ClientFactRepository
+
+
+def test_dispatch_remember_fact_upserts(session):
+    user = _seed_user(session, phone="0840")
+    dispatch(
+        ToolCall(name="remember_fact", args={"key": "nama", "value": "Budi"}),
+        session=session,
+        user=user,
+    )
+    out = json.loads(
+        dispatch(
+            ToolCall(name="remember_fact", args={"key": "nama", "value": "Andi"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["key"] == "nama"
+    assert out["value"] == "Andi"
+    facts = ClientFactRepository(session).list_for_user(user.id)
+    assert len(facts) == 1
+    assert facts[0].value == "Andi"

@@ -5,6 +5,8 @@ from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
 from app.repositories.lead_repo import LeadRepository
 from app.repositories.meeting_repo import MeetingRepository
+from app.repositories.client_fact_repo import ClientFactRepository
+from app.repositories.notification_repo import NotificationRepository
 from app.repositories.project_repo import ProjectRepository
 from app.repositories.ticket_repo import TicketRepository
 
@@ -139,6 +141,22 @@ TOOL_SPECS: list[ToolSpec] = [
             "menjadi 'assigned'). Panggil setelah create_ticket berhasil."
         ),
         parameters={"type": "object", "properties": {}},
+    ),
+    ToolSpec(
+        name="remember_fact",
+        description=(
+            "Simpan fakta durable tentang user (mis. nama, perusahaan, peran, preferensi) "
+            "agar diingat di percakapan berikutnya. Panggil saat user menyebutkan info "
+            "tentang dirinya yang layak diingat."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Label fakta, mis. 'nama', 'perusahaan'"},
+                "value": {"type": "string", "description": "Isi fakta"},
+            },
+            "required": ["key", "value"],
+        },
     ),
 ]
 
@@ -322,6 +340,15 @@ def dispatch(
                     "status": ticket.status,
                     "assigned_developer": ticket.assigned_developer,
                 },
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "remember_fact":
+            key = tool_call.args.get("key", "")
+            value = tool_call.args.get("value", "")
+            ClientFactRepository(session).upsert(user.id, key, value)
+            return json.dumps(
+                {"key": key, "value": value, "result": "Fakta disimpan."},
                 ensure_ascii=False,
             )
 
