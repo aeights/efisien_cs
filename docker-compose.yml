@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: efisien
+      POSTGRES_PASSWORD: efisien
+      POSTGRES_DB: efisien_cs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U efisien -d efisien_cs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://efisien:efisien@db:5432/efisien_cs
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_index:/app/data/chroma
+
+volumes:
+  pgdata:
+  chroma_index:
