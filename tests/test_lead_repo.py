@@ -40,3 +40,18 @@ def test_new_lead_created_once_open_lead_is_closed(session):
     assert b.id != a.id
     assert repo.get_latest(user.id).id == b.id
     assert repo.get_open(user.id).id == b.id
+
+
+def test_set_proposal_stores_and_qualifies(session):
+    user = _user(session, phone="0815")
+    repo = LeadRepository(session)
+    lead = repo.upsert(user.id, project_type="POS")
+    proposal = {
+        "scope": "POS 3 cabang",
+        "timeline": "6-8 minggu",
+        "cost": "Rp 25 juta",
+        "deliverables": ["Aplikasi POS Android", "Dashboard web"],
+    }
+    repo.set_proposal(lead, proposal)
+    assert lead.proposal == proposal
+    assert lead.status == "qualified"

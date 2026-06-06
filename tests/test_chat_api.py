@@ -177,3 +177,57 @@ def test_handoff_flow_via_chat(build_client):
     resp = client.post("/chat", json={"message": "saya mau bicara dengan orang", "phone": "0864"})
     assert resp.status_code == 200
     assert "tim" in resp.json()["reply"].lower()
+
+
+def test_full_workflow_faq_lead_proposal_booking(build_client):
+    from datetime import datetime
+
+    from app.integrations.calendar import WIB, fmt_slot
+
+    slot = datetime(2099, 1, 5, 9, 0, tzinfo=WIB)
+    # One scripted FakeLLM drives the whole journey; it advances across POSTs.
+    scripted = [
+        # 1) FAQ
+        LLMResponse(tool_calls=[ToolCall(name="search_knowledge_base", args={"query": "layanan"})]),
+        LLMResponse(text="Layanan kami: ERP, AI, dan pengembangan aplikasi."),
+        # 2) Lead
+        LLMResponse(
+            tool_calls=[
+                ToolCall(name="create_lead", args={"project_type": "POS", "requirements": "3 cabang", "budget": "25 juta"})
+            ]
+        ),
+        LLMResponse(text="Kebutuhan Anda sudah dicatat."),
+        # 3) Proposal
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    name="generate_proposal",
+                    args={"scope": "POS 3 cabang", "timeline": "6-8 minggu", "cost": "Rp 25 juta", "deliverables": ["Aplikasi POS"]},
+                )
+            ]
+        ),
+        LLMResponse(text="Berikut proposal Anda: scope POS 3 cabang, estimasi Rp 25 juta."),
+        # 4) Booking
+        LLMResponse(tool_calls=[ToolCall(name="get_available_slots", args={})]),
+        LLMResponse(tool_calls=[ToolCall(name="create_meeting", args={"slot": fmt_slot(slot)})]),
+        LLMResponse(text="Konsultasi Anda terjadwal."),
+    ]
+    client = build_client(
+        FakeLLM(responses=scripted), _EmptyRetriever(), calendar=FakeCalendar([slot])
+    )
+
+    r1 = client.post("/chat", json={"message": "Apa layanan kalian?", "phone": "0890"})
+    assert r1.status_code == 200
+    assert "Layanan" in r1.json()["reply"]
+
+    r2 = client.post("/chat", json={"message": "Mau bikin POS 3 cabang, budget 25 juta", "phone": "0890"})
+    assert r2.status_code == 200
+    assert "dicatat" in r2.json()["reply"]
+
+    r3 = client.post("/chat", json={"message": "Tolong buatkan proposal", "phone": "0890"})
+    assert r3.status_code == 200
+    assert "proposal" in r3.json()["reply"].lower()
+
+    r4 = client.post("/chat", json={"message": "Sekalian jadwalkan konsultasi", "phone": "0890"})
+    assert r4.status_code == 200
+    assert "terjadwal" in r4.json()["reply"]

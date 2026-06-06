@@ -322,3 +322,43 @@ def test_dispatch_notify_manager_writes_row(session):
     assert out["target_role"] == "manager"
     notif = session.get(Notification, out["notification_id"])
     assert notif.target_role == "manager"
+
+
+def test_dispatch_generate_proposal_stores_and_qualifies(session):
+    user = _seed_user(session, phone="0850")
+    LeadRepository(session).upsert(user.id, project_type="POS", requirements="3 cabang")
+    out = json.loads(
+        dispatch(
+            ToolCall(
+                name="generate_proposal",
+                args={
+                    "scope": "POS 3 cabang",
+                    "timeline": "6-8 minggu",
+                    "cost": "Rp 25 juta",
+                    "deliverables": ["Aplikasi POS Android", "Dashboard web"],
+                },
+            ),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["status"] == "qualified"
+    assert out["proposal"]["deliverables"] == ["Aplikasi POS Android", "Dashboard web"]
+    lead = LeadRepository(session).get_latest(user.id)
+    assert lead.proposal["scope"] == "POS 3 cabang"
+    assert lead.status == "qualified"
+
+
+def test_dispatch_generate_proposal_requires_lead(session):
+    user = _seed_user(session, phone="0851")
+    out = json.loads(
+        dispatch(
+            ToolCall(
+                name="generate_proposal",
+                args={"scope": "x", "timeline": "y", "cost": "z"},
+            ),
+            session=session,
+            user=user,
+        )
+    )
+    assert "Belum ada lead" in out["result"]

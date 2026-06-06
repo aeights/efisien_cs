@@ -45,3 +45,9 @@ class LeadRepository:
 
         self.session.flush()
         return lead
+
+    def set_proposal(self, lead: Lead, proposal: dict) -> Lead:
+        lead.proposal = proposal
+        lead.status = "qualified"
+        self.session.flush()
+        return lead
