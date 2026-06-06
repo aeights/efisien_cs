@@ -16,6 +16,8 @@ from app.models.lead import Lead  # noqa: F401
 from app.models.meeting import Meeting  # noqa: F401
 from app.models.project import Project  # noqa: F401
 from app.models.ticket import Ticket  # noqa: F401
+from app.models.client_fact import ClientFact  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
 from app.rag.embeddings import FakeEmbedder
 from app.rag.retriever import Retriever
 from app.rag.store import ChromaStore
@@ -160,3 +162,18 @@ def test_project_status_flow_via_chat(build_client):
     resp = client.post("/chat", json={"message": "gimana proyek saya?", "phone": "0862"})
     assert resp.status_code == 200
     assert "proyek" in resp.json()["reply"].lower()
+
+
+def test_handoff_flow_via_chat(build_client):
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(name="notify_manager", args={"reason": "klien minta bicara dengan manusia"})
+            ]
+        ),
+        LLMResponse(text="Baik, saya teruskan ke tim kami. Mohon ditunggu."),
+    ]
+    client = build_client(FakeLLM(responses=scripted), _EmptyRetriever())
+    resp = client.post("/chat", json={"message": "saya mau bicara dengan orang", "phone": "0864"})
+    assert resp.status_code == 200
+    assert "tim" in resp.json()["reply"].lower()
