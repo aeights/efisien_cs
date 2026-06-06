@@ -195,3 +195,38 @@ def test_handoff_loop_persists_notification(session):
     assert len(notifs) == 1
     assert notifs[0].target_role == "manager"
     assert notifs[0].payload["phone"] == "0875"
+
+
+def test_proposal_loop_persists(session):
+    from app.repositories.lead_repo import LeadRepository
+
+    scripted = [
+        LLMResponse(
+            tool_calls=[
+                ToolCall(name="create_lead", args={"project_type": "POS", "requirements": "3 cabang"})
+            ]
+        ),
+        LLMResponse(
+            tool_calls=[
+                ToolCall(
+                    name="generate_proposal",
+                    args={
+                        "scope": "POS 3 cabang",
+                        "timeline": "6 minggu",
+                        "cost": "Rp 25 juta",
+                        "deliverables": ["Aplikasi POS"],
+                    },
+                )
+            ]
+        ),
+        LLMResponse(text="Berikut proposal Anda."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="mau POS, buatkan proposal", phone="0877"
+    )
+    assert "proposal" in reply.lower()
+    lead = LeadRepository(session).get_latest(user.id)
+    assert lead.proposal["scope"] == "POS 3 cabang"
+    assert lead.proposal["deliverables"] == ["Aplikasi POS"]
+    assert lead.status == "qualified"
