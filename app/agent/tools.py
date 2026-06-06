@@ -5,6 +5,8 @@ from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
 from app.repositories.lead_repo import LeadRepository
 from app.repositories.meeting_repo import MeetingRepository
+from app.repositories.client_fact_repo import ClientFactRepository
+from app.repositories.notification_repo import NotificationRepository
 from app.repositories.project_repo import ProjectRepository
 from app.repositories.ticket_repo import TicketRepository
 
@@ -140,6 +142,46 @@ TOOL_SPECS: list[ToolSpec] = [
         ),
         parameters={"type": "object", "properties": {}},
     ),
+    ToolSpec(
+        name="remember_fact",
+        description=(
+            "Simpan fakta durable tentang user (mis. nama, perusahaan, peran, preferensi) "
+            "agar diingat di percakapan berikutnya. Panggil saat user menyebutkan info "
+            "tentang dirinya yang layak diingat."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Label fakta, mis. 'nama', 'perusahaan'"},
+                "value": {"type": "string", "description": "Isi fakta"},
+            },
+            "required": ["key", "value"],
+        },
+    ),
+    ToolSpec(
+        name="notify_sales",
+        description=(
+            "Teruskan ke tim sales saat ada peluang/permintaan komersial yang butuh "
+            "manusia (mis. negosiasi harga, penawaran khusus). Isi 'reason' yang jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string", "description": "Alasan eskalasi ke sales"}},
+            "required": ["reason"],
+        },
+    ),
+    ToolSpec(
+        name="notify_manager",
+        description=(
+            "Eskalasi ke manajer saat user minta bicara dengan manusia, ada komplain "
+            "pembayaran/kontrak, atau kegagalan berulang. Isi 'reason' yang jelas."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string", "description": "Alasan eskalasi ke manajer"}},
+            "required": ["reason"],
+        },
+    ),
 ]
 
 
@@ -149,6 +191,21 @@ def _meeting_link() -> str:
 
 _CATEGORIES = {"bug", "feature", "question"}
 _PRIORITIES = {"low", "med", "high"}
+
+
+def _notify(session, user, role: str, reason: str) -> str:
+    payload = {"name": user.name, "phone": user.phone, "email": user.email}
+    notif = NotificationRepository(session).create(role, reason=reason, payload=payload)
+    print(f"[NOTIFY:{role}] {reason} | user={user.name or user.phone or user.email}")
+    return json.dumps(
+        {
+            "notification_id": notif.id,
+            "target_role": notif.target_role,
+            "status": notif.status,
+            "result": f"Diteruskan ke tim {role}; akan menindaklanjuti.",
+        },
+        ensure_ascii=False,
+    )
 
 
 def dispatch(
@@ -324,6 +381,21 @@ def dispatch(
                 },
                 ensure_ascii=False,
             )
+
+        if tool_call.name == "remember_fact":
+            key = tool_call.args.get("key", "")
+            value = tool_call.args.get("value", "")
+            ClientFactRepository(session).upsert(user.id, key, value)
+            return json.dumps(
+                {"key": key, "value": value, "result": "Fakta disimpan."},
+                ensure_ascii=False,
+            )
+
+        if tool_call.name == "notify_sales":
+            return _notify(session, user, "sales", tool_call.args.get("reason", ""))
+
+        if tool_call.name == "notify_manager":
+            return _notify(session, user, "manager", tool_call.args.get("reason", ""))
 
         return json.dumps(
             {"error": f"Tool tidak dikenal: {tool_call.name}"}, ensure_ascii=False

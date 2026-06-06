@@ -138,3 +138,60 @@ def test_ticket_loop_creates_and_assigns(session):
     assert ticket.status == "assigned"
     assert ticket.category == "bug"
     assert ticket.assigned_developer == "Tim Development"
+
+
+def test_memory_facts_injected_into_system_prompt(session):
+    from app.repositories.client_fact_repo import ClientFactRepository
+    from app.repositories.user_repo import UserRepository
+
+    user = UserRepository(session).get_or_create(phone="0873")
+    session.flush()
+    ClientFactRepository(session).upsert(user.id, "nama", "Budi")
+    ClientFactRepository(session).upsert(user.id, "perusahaan", "Toko Maju")
+
+    llm = FakeLLM(reply="Halo Budi!")
+    handle_chat(session, llm, _FakeRetriever(), message="hai", phone="0873")
+
+    system_sent = llm.calls[0][0]
+    assert "nama: Budi" in system_sent
+    assert "perusahaan: Toko Maju" in system_sent
+
+
+def test_empty_model_reply_uses_fallback(session):
+    llm = FakeLLM(responses=[LLMResponse(text="")])
+    reply, _user = handle_chat(session, llm, _FakeRetriever(), message="hai", phone="0876")
+    assert reply.strip() != ""
+
+
+def test_remember_fact_loop_persists(session):
+    from app.repositories.client_fact_repo import ClientFactRepository
+
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="remember_fact", args={"key": "nama", "value": "Budi"})]),
+        LLMResponse(text="Senang berkenalan, Budi!"),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="nama saya Budi", phone="0874"
+    )
+    facts = ClientFactRepository(session).list_for_user(user.id)
+    assert any(f.key == "nama" and f.value == "Budi" for f in facts)
+
+
+def test_handoff_loop_persists_notification(session):
+    from sqlalchemy import select
+
+    from app.models.notification import Notification
+
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="notify_manager", args={"reason": "komplain pembayaran"})]),
+        LLMResponse(text="Saya teruskan ke tim kami."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="saya mau komplain", phone="0875"
+    )
+    notifs = session.scalars(select(Notification)).all()
+    assert len(notifs) == 1
+    assert notifs[0].target_role == "manager"
+    assert notifs[0].payload["phone"] == "0875"

@@ -264,3 +264,61 @@ def test_dispatch_assign_developer_no_ticket(session):
         dispatch(ToolCall(name="assign_developer", args={}), session=session, user=user)
     )
     assert "Belum ada tiket" in out["result"]
+
+
+from app.repositories.client_fact_repo import ClientFactRepository
+
+
+def test_dispatch_remember_fact_upserts(session):
+    user = _seed_user(session, phone="0840")
+    dispatch(
+        ToolCall(name="remember_fact", args={"key": "nama", "value": "Budi"}),
+        session=session,
+        user=user,
+    )
+    out = json.loads(
+        dispatch(
+            ToolCall(name="remember_fact", args={"key": "nama", "value": "Andi"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["key"] == "nama"
+    assert out["value"] == "Andi"
+    facts = ClientFactRepository(session).list_for_user(user.id)
+    assert len(facts) == 1
+    assert facts[0].value == "Andi"
+
+
+from app.models.notification import Notification
+
+
+def test_dispatch_notify_sales_writes_row(session):
+    user = _seed_user(session, phone="0841", email="a@mail.com")
+    out = json.loads(
+        dispatch(
+            ToolCall(name="notify_sales", args={"reason": "minta penawaran khusus"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["target_role"] == "sales"
+    assert out["status"] == "sent"
+    notif = session.get(Notification, out["notification_id"])
+    assert notif.reason == "minta penawaran khusus"
+    assert notif.payload["email"] == "a@mail.com"
+    assert notif.payload["phone"] == "0841"
+
+
+def test_dispatch_notify_manager_writes_row(session):
+    user = _seed_user(session, phone="0842")
+    out = json.loads(
+        dispatch(
+            ToolCall(name="notify_manager", args={"reason": "komplain"}),
+            session=session,
+            user=user,
+        )
+    )
+    assert out["target_role"] == "manager"
+    notif = session.get(Notification, out["notification_id"])
+    assert notif.target_role == "manager"
