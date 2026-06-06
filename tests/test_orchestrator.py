@@ -157,6 +157,12 @@ def test_memory_facts_injected_into_system_prompt(session):
     assert "perusahaan: Toko Maju" in system_sent
 
 
+def test_empty_model_reply_uses_fallback(session):
+    llm = FakeLLM(responses=[LLMResponse(text="")])
+    reply, _user = handle_chat(session, llm, _FakeRetriever(), message="hai", phone="0876")
+    assert reply.strip() != ""
+
+
 def test_remember_fact_loop_persists(session):
     from app.repositories.client_fact_repo import ClientFactRepository
 

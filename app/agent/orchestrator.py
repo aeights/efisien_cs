@@ -71,6 +71,9 @@ def handle_chat(
         reply = response.text or ""
         break
 
+    if not reply.strip():
+        reply = FALLBACK_REPLY
+
     messages.add(user.id, "user", message)
     messages.add(user.id, "assistant", reply)
     session.commit()
