@@ -10,6 +10,7 @@ from app.models.lead import Lead  # noqa: F401  (register table)
 from app.models.meeting import Meeting  # noqa: F401  (register table)
 from app.models.project import Project  # noqa: F401  (register table)
 from app.models.ticket import Ticket  # noqa: F401  (register table)
+from app.models.client_fact import ClientFact  # noqa: F401  (register table)
 
 
 @pytest.fixture
