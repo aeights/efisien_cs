@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache
+.env
+data/chroma
+docs/
+tests/
+.python-version
