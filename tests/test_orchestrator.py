@@ -155,3 +155,37 @@ def test_memory_facts_injected_into_system_prompt(session):
     system_sent = llm.calls[0][0]
     assert "nama: Budi" in system_sent
     assert "perusahaan: Toko Maju" in system_sent
+
+
+def test_remember_fact_loop_persists(session):
+    from app.repositories.client_fact_repo import ClientFactRepository
+
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="remember_fact", args={"key": "nama", "value": "Budi"})]),
+        LLMResponse(text="Senang berkenalan, Budi!"),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="nama saya Budi", phone="0874"
+    )
+    facts = ClientFactRepository(session).list_for_user(user.id)
+    assert any(f.key == "nama" and f.value == "Budi" for f in facts)
+
+
+def test_handoff_loop_persists_notification(session):
+    from sqlalchemy import select
+
+    from app.models.notification import Notification
+
+    scripted = [
+        LLMResponse(tool_calls=[ToolCall(name="notify_manager", args={"reason": "komplain pembayaran"})]),
+        LLMResponse(text="Saya teruskan ke tim kami."),
+    ]
+    llm = FakeLLM(responses=scripted)
+    reply, user = handle_chat(
+        session, llm, _FakeRetriever(), message="saya mau komplain", phone="0875"
+    )
+    notifs = session.scalars(select(Notification)).all()
+    assert len(notifs) == 1
+    assert notifs[0].target_role == "manager"
+    assert notifs[0].payload["phone"] == "0875"
