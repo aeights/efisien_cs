@@ -138,3 +138,20 @@ def test_ticket_loop_creates_and_assigns(session):
     assert ticket.status == "assigned"
     assert ticket.category == "bug"
     assert ticket.assigned_developer == "Tim Development"
+
+
+def test_memory_facts_injected_into_system_prompt(session):
+    from app.repositories.client_fact_repo import ClientFactRepository
+    from app.repositories.user_repo import UserRepository
+
+    user = UserRepository(session).get_or_create(phone="0873")
+    session.flush()
+    ClientFactRepository(session).upsert(user.id, "nama", "Budi")
+    ClientFactRepository(session).upsert(user.id, "perusahaan", "Toko Maju")
+
+    llm = FakeLLM(reply="Halo Budi!")
+    handle_chat(session, llm, _FakeRetriever(), message="hai", phone="0873")
+
+    system_sent = llm.calls[0][0]
+    assert "nama: Budi" in system_sent
+    assert "perusahaan: Toko Maju" in system_sent
