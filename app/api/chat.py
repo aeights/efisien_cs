@@ -5,6 +5,7 @@ from app.agent.orchestrator import handle_chat
 from app.config import settings
 from app.db import get_session
 from app.integrations.calendar import LocalCalendar
+from app.integrations.google_calendar import build_google_calendar
 from app.integrations.email import ConsoleEmail, SmtpEmail
 from app.llm.base import LLMClient
 from app.llm.gemini import GeminiLLM
@@ -25,6 +26,8 @@ def get_retriever() -> Retriever:
 
 
 def get_calendar():
+    if settings.google_calendar_id and settings.google_service_account_file:
+        return build_google_calendar(settings)
     return LocalCalendar()
 
 
