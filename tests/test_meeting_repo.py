@@ -29,3 +29,21 @@ def test_get_latest_for_user(session):
     repo.create(lead.id, datetime(2099, 1, 5, 9, 0, tzinfo=WIB), "l1")
     m2 = repo.create(lead.id, datetime(2099, 1, 6, 9, 0, tzinfo=WIB), "l2")
     assert repo.get_latest_for_user(u.id).id == m2.id
+
+
+def test_set_google_event_id(session):
+    from datetime import datetime
+
+    from app.integrations.calendar import WIB
+    from app.models.user import User
+    from app.repositories.lead_repo import LeadRepository
+    from app.repositories.meeting_repo import MeetingRepository
+
+    u = User(name="K", phone="0890")
+    session.add(u)
+    session.flush()
+    lead = LeadRepository(session).upsert(u.id, project_type="POS")
+    repo = MeetingRepository(session)
+    m = repo.create(lead.id, datetime(2099, 1, 5, 9, 0, tzinfo=WIB), "https://meet/x")
+    repo.set_google_event_id(m, "evt-123")
+    assert m.google_event_id == "evt-123"
