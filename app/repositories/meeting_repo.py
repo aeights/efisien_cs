@@ -35,3 +35,8 @@ class MeetingRepository:
         self.session.add(meeting)
         self.session.flush()
         return meeting
+
+    def set_google_event_id(self, meeting: Meeting, event_id: str) -> Meeting:
+        meeting.google_event_id = event_id
+        self.session.flush()
+        return meeting

@@ -362,3 +362,19 @@ def test_dispatch_generate_proposal_requires_lead(session):
         )
     )
     assert "Belum ada lead" in out["result"]
+
+
+def test_dispatch_create_meeting_stores_google_event_id(session):
+    user = _seed_user(session, phone="0826")
+    LeadRepository(session).upsert(user.id, project_type="POS")
+    cal = FakeCalendar([_SLOT], event_id="evt-123")
+    out = json.loads(
+        dispatch(
+            ToolCall(name="create_meeting", args={"slot": "2099-01-05 09:00"}),
+            session=session,
+            user=user,
+            calendar=cal,
+        )
+    )
+    assert out["google_event_id"] == "evt-123"
+    assert cal.created  # create_event was invoked with the booked slot

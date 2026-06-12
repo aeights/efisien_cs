@@ -1,5 +1,8 @@
 import json
+import logging
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
@@ -305,15 +308,26 @@ def dispatch(
                     {"error": f"Slot '{chosen}' tidak tersedia. Tawarkan slot lain."},
                     ensure_ascii=False,
                 )
-            meeting = MeetingRepository(session).create(
-                lead.id, parse_slot(chosen), _meeting_link()
-            )
+            link = _meeting_link()
+            slot_dt = parse_slot(chosen)
+            meeting = MeetingRepository(session).create(lead.id, slot_dt, link)
+            try:
+                event_id = calendar.create_event(
+                    slot_dt,
+                    summary="Konsultasi - PT Efisien Integrasi Indonesia",
+                    description=f"Link: {link}",
+                )
+                if event_id:
+                    MeetingRepository(session).set_google_event_id(meeting, event_id)
+            except Exception:
+                logger.warning("calendar.create_event failed", exc_info=True)
             return json.dumps(
                 {
                     "meeting_id": meeting.id,
                     "meeting_time": chosen,
                     "meeting_link": meeting.meeting_link,
                     "status": meeting.status,
+                    "google_event_id": meeting.google_event_id,
                 },
                 ensure_ascii=False,
             )

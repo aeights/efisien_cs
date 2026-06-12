@@ -27,3 +27,18 @@ Buka **http://localhost:8000** untuk UI chat. Cek kesehatan: `curl http://localh
 - Rahasia (`.env`) tidak ikut ke dalam image; dibaca runtime oleh Compose.
 - Index Chroma & data Postgres persist di named volume (`chroma_index`, `pgdata`).
 - Container app berjalan sebagai user non-root (`appuser`).
+
+## Integrasi nyata (opsional)
+
+Isi di `.env` untuk mengaktifkan integrasi (kosong = fallback aman):
+
+- **Gmail SMTP:** `SMTP_USER`, `SMTP_PASSWORD` (App Password Gmail; 2FA wajib aktif), `SMTP_FROM` opsional.
+- **Google Calendar:** `GOOGLE_SERVICE_ACCOUNT_FILE` (path file JSON service account, mount ke container), `GOOGLE_CALENDAR_ID` (calendar yang di-share ke email service account).
+- **WhatsApp (WAHA):** `WAHA_API_KEY` (sama dengan yang dipakai service `waha`). `WAHA_BASE_URL`/`WAHA_SESSION` sudah diset oleh Compose.
+
+### Mengaktifkan WhatsApp
+1. `docker compose up --build` (menyalakan `app`, `db`, dan `waha`).
+2. Buka dashboard WAHA di **http://localhost:3000**, mulai session `default`, lalu **scan QR** dengan WhatsApp di HP.
+3. WAHA otomatis mengirim pesan masuk ke `http://app:8000/webhook/whatsapp`; agen membalas via WhatsApp.
+
+> Catatan: nama variabel env internal WAHA mengikuti dokumentasi image `devlikeapro/waha`; sesuaikan bila versi image berbeda.

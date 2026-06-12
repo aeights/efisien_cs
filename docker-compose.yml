@@ -22,11 +22,24 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg://efisien:efisien@db:5432/efisien_cs
+      WAHA_BASE_URL: http://waha:3000
     ports:
       - "8000:8000"
     volumes:
       - chroma_index:/app/data/chroma
 
+  waha:
+    image: devlikeapro/waha
+    ports:
+      - "3000:3000"
+    environment:
+      WHATSAPP_HOOK_URL: http://app:8000/webhook/whatsapp
+      WHATSAPP_HOOK_EVENTS: message
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+    volumes:
+      - waha_sessions:/app/.sessions
+
 volumes:
   pgdata:
   chroma_index:
+  waha_sessions:
