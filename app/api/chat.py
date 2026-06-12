@@ -7,6 +7,7 @@ from app.db import get_session
 from app.integrations.calendar import LocalCalendar
 from app.integrations.google_calendar import build_google_calendar
 from app.integrations.email import ConsoleEmail, SmtpEmail
+from app.integrations.whatsapp import WahaClient
 from app.llm.base import LLMClient
 from app.llm.gemini import GeminiLLM
 from app.rag.embeddings import GeminiEmbedder
@@ -41,6 +42,14 @@ def get_email():
             sender=settings.smtp_from or settings.smtp_user,
         )
     return ConsoleEmail()
+
+
+def get_waha_client():
+    return WahaClient(
+        base_url=settings.waha_base_url,
+        session=settings.waha_session,
+        api_key=settings.waha_api_key,
+    )
 
 
 @router.get("/health")
