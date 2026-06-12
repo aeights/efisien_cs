@@ -1,5 +1,8 @@
 import json
+import logging
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from app.integrations.calendar import fmt_slot, now_wib, parse_slot
 from app.llm.base import ToolCall, ToolSpec
@@ -306,17 +309,18 @@ def dispatch(
                     ensure_ascii=False,
                 )
             link = _meeting_link()
-            meeting = MeetingRepository(session).create(lead.id, parse_slot(chosen), link)
+            slot_dt = parse_slot(chosen)
+            meeting = MeetingRepository(session).create(lead.id, slot_dt, link)
             try:
                 event_id = calendar.create_event(
-                    parse_slot(chosen),
+                    slot_dt,
                     summary="Konsultasi - PT Efisien Integrasi Indonesia",
                     description=f"Link: {link}",
                 )
                 if event_id:
                     MeetingRepository(session).set_google_event_id(meeting, event_id)
             except Exception:
-                pass  # calendar is best-effort; the booking is already saved
+                logger.warning("calendar.create_event failed", exc_info=True)
             return json.dumps(
                 {
                     "meeting_id": meeting.id,

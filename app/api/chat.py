@@ -1,3 +1,6 @@
+import logging
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -15,6 +18,8 @@ from app.rag.retriever import Retriever
 from app.rag.store import ChromaStore
 from app.schemas.chat import ChatRequest, ChatResponse
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -26,9 +31,13 @@ def get_retriever() -> Retriever:
     return Retriever(ChromaStore.persistent(), GeminiEmbedder())
 
 
+@lru_cache(maxsize=None)
 def get_calendar():
     if settings.google_calendar_id and settings.google_service_account_file:
-        return build_google_calendar(settings)
+        try:
+            return build_google_calendar(settings)
+        except Exception:
+            logger.warning("Failed to build GoogleCalendar; falling back to LocalCalendar", exc_info=True)
     return LocalCalendar()
 
 
@@ -44,6 +53,7 @@ def get_email():
     return ConsoleEmail()
 
 
+@lru_cache(maxsize=None)
 def get_waha_client():
     return WahaClient(
         base_url=settings.waha_base_url,

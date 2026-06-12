@@ -100,3 +100,17 @@ def test_webhook_ignores_fromme_and_groups():
     assert client.post("/webhook/whatsapp", json=group).json()["status"] == "ignored"
     assert waha.sent == []
     app.dependency_overrides.clear()
+
+
+class _FailingWaha:
+    def send_text(self, chat_id, text):
+        raise RuntimeError("waha down")
+
+
+def test_webhook_returns_ok_even_if_send_fails():
+    client = _webhook_client(FakeLLM(reply="Halo!"), _FailingWaha())
+    payload = {"event": "message", "payload": {"from": "628111@c.us", "body": "halo", "fromMe": False}}
+    r = client.post("/webhook/whatsapp", json=payload)
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+    app.dependency_overrides.clear()

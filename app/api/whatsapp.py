@@ -1,9 +1,15 @@
+import functools
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.agent.orchestrator import handle_chat
 from app.api.chat import get_calendar, get_email, get_llm, get_retriever, get_waha_client
 from app.db import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -27,8 +33,14 @@ async def whatsapp_webhook(
     if payload.get("fromMe") or chat_id.endswith("@g.us") or not body.strip():
         return {"status": "ignored"}
     phone = chat_id.split("@")[0]
-    reply, _user = handle_chat(
-        session, llm, retriever, message=body, phone=phone, calendar=calendar, mailer=mailer
+    reply, _user = await run_in_threadpool(
+        functools.partial(
+            handle_chat, session, llm, retriever,
+            message=body, phone=phone, calendar=calendar, mailer=mailer,
+        )
     )
-    waha.send_text(chat_id, reply)
+    try:
+        await run_in_threadpool(waha.send_text, chat_id, reply)
+    except Exception:
+        logger.warning("WAHA send_text failed for %s", chat_id, exc_info=True)
     return {"status": "ok"}

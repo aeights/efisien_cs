@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from app.integrations.calendar import (
@@ -6,6 +7,8 @@ from app.integrations.calendar import (
     iter_business_slots,
     to_wib,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleCalendar(CalendarAdapter):
@@ -30,7 +33,10 @@ class GoogleCalendar(CalendarAdapter):
             )
             .execute()
         )
-        busy_raw = resp.get("calendars", {}).get(self._calendar_id, {}).get("busy", [])
+        cal_entry = resp.get("calendars", {}).get(self._calendar_id, {})
+        if cal_entry.get("errors"):
+            logger.warning("Google freebusy returned errors for %s: %s", self._calendar_id, cal_entry["errors"])
+        busy_raw = cal_entry.get("busy", [])
         busy = [
             (datetime.fromisoformat(b["start"]), datetime.fromisoformat(b["end"]))
             for b in busy_raw
@@ -65,7 +71,7 @@ def build_google_calendar(settings) -> GoogleCalendar:
 
     creds = service_account.Credentials.from_service_account_file(
         settings.google_service_account_file,
-        scopes=["https://www.googleapis.com/auth/calendar"],
+        scopes=["https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar.readonly"],
     )
     service = build("calendar", "v3", credentials=creds, cache_discovery=False)
     return GoogleCalendar(service, settings.google_calendar_id)
