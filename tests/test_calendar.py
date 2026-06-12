@@ -33,3 +33,26 @@ def test_excludes_booked_slot():
 def test_fmt_and_parse_roundtrip():
     s = "2099-01-05 09:00"
     assert fmt_slot(parse_slot(s)) == s
+
+
+def test_create_event_default_is_noop():
+    from datetime import datetime
+
+    from app.integrations.calendar import WIB, LocalCalendar
+
+    out = LocalCalendar().create_event(
+        datetime(2099, 1, 5, 9, 0, tzinfo=WIB), summary="x", description="y"
+    )
+    assert out is None
+
+
+def test_iter_business_slots_skips_weekends_and_past():
+    from datetime import datetime
+
+    from app.integrations.calendar import WIB, fmt_slot, iter_business_slots
+
+    now = datetime(2099, 1, 4, 0, 0, tzinfo=WIB)
+    slots = iter_business_slots(now)
+    assert slots, "should produce business-hour slots"
+    assert all(s > now for s in slots)
+    assert all(9 <= s.hour <= 16 for s in slots)

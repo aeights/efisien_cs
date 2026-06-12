@@ -28,10 +28,31 @@ def parse_slot(s: str) -> datetime:
     return datetime.strptime(s, SLOT_FMT).replace(tzinfo=WIB)
 
 
+def iter_business_slots(now: datetime) -> list[datetime]:
+    """All future business-hour slots within the horizon (no booking awareness)."""
+    now_w = to_wib(now)
+    start = now_w.date()
+    result: list[datetime] = []
+    for offset in range(HORIZON_DAYS):
+        day = start + timedelta(days=offset)
+        if day.weekday() >= 5:
+            continue
+        for hour in range(WORK_START, WORK_END):
+            slot = datetime(day.year, day.month, day.day, hour, 0, tzinfo=WIB)
+            if slot <= now_w:
+                continue
+            result.append(slot)
+    return result
+
+
 class CalendarAdapter(ABC):
     @abstractmethod
     def available_slots(self, booked: set[datetime], *, now: datetime) -> list[datetime]:
         ...
+
+    def create_event(self, start: datetime, *, summary: str, description: str) -> str | None:
+        """Optional: create a real calendar event; default no-op returns None."""
+        return None
 
 
 class LocalCalendar(CalendarAdapter):
@@ -39,18 +60,4 @@ class LocalCalendar(CalendarAdapter):
 
     def available_slots(self, booked: set[datetime], *, now: datetime) -> list[datetime]:
         booked_keys = {fmt_slot(b) for b in booked}
-        now_w = to_wib(now)
-        start = now_w.date()
-        result: list[datetime] = []
-        for offset in range(HORIZON_DAYS):
-            day = start + timedelta(days=offset)
-            if day.weekday() >= 5:  # Sat=5, Sun=6
-                continue
-            for hour in range(WORK_START, WORK_END):  # 9..16
-                slot = datetime(day.year, day.month, day.day, hour, 0, tzinfo=WIB)
-                if slot <= now_w:
-                    continue
-                if fmt_slot(slot) in booked_keys:
-                    continue
-                result.append(slot)
-        return result
+        return [s for s in iter_business_slots(now) if fmt_slot(s) not in booked_keys]
