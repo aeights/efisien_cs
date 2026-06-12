@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.agent.orchestrator import handle_chat
+from app.config import settings
 from app.db import get_session
 from app.integrations.calendar import LocalCalendar
-from app.integrations.email import ConsoleEmail
+from app.integrations.email import ConsoleEmail, SmtpEmail
 from app.llm.base import LLMClient
 from app.llm.gemini import GeminiLLM
 from app.rag.embeddings import GeminiEmbedder
@@ -28,6 +29,14 @@ def get_calendar():
 
 
 def get_email():
+    if settings.smtp_user and settings.smtp_password:
+        return SmtpEmail(
+            host=settings.smtp_host,
+            port=settings.smtp_port,
+            user=settings.smtp_user,
+            password=settings.smtp_password,
+            sender=settings.smtp_from or settings.smtp_user,
+        )
     return ConsoleEmail()
 
 
