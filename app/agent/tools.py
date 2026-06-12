@@ -305,15 +305,25 @@ def dispatch(
                     {"error": f"Slot '{chosen}' tidak tersedia. Tawarkan slot lain."},
                     ensure_ascii=False,
                 )
-            meeting = MeetingRepository(session).create(
-                lead.id, parse_slot(chosen), _meeting_link()
-            )
+            link = _meeting_link()
+            meeting = MeetingRepository(session).create(lead.id, parse_slot(chosen), link)
+            try:
+                event_id = calendar.create_event(
+                    parse_slot(chosen),
+                    summary="Konsultasi - PT Efisien Integrasi Indonesia",
+                    description=f"Link: {link}",
+                )
+                if event_id:
+                    MeetingRepository(session).set_google_event_id(meeting, event_id)
+            except Exception:
+                pass  # calendar is best-effort; the booking is already saved
             return json.dumps(
                 {
                     "meeting_id": meeting.id,
                     "meeting_time": chosen,
                     "meeting_link": meeting.meeting_link,
                     "status": meeting.status,
+                    "google_event_id": meeting.google_event_id,
                 },
                 ensure_ascii=False,
             )
